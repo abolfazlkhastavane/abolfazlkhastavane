@@ -1,1 +1,100 @@
-test
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>VLESS Fragment Converter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background: #0f172a; color: #e2e8f0; font-family: Tahoma, sans-serif; }
+        textarea { background: #1e293b !important; border: 1px solid #334155 !important; color: #60a5fa !important; }
+        code { font-family: 'Courier New', Courier, monospace; }
+    </style>
+</head>
+<body class="p-4 md:p-10">
+    <div class="max-w-4xl mx-auto">
+        <div class="text-center mb-10">
+            <h1 class="text-3xl font-bold text-blue-400 mb-2">تبدیل هوشمند BPB به VLESS</h1>
+            <p class="text-gray-500 text-sm">استخراج لینک با متد ChatGPT Fronting و پشتیبانی از Fragment</p>
+        </div>
+        
+        <div class="bg-slate-800 p-6 rounded-2xl shadow-xl mb-8 border border-slate-700">
+            <label class="block mb-2 text-sm font-medium text-gray-400">فایل JSON را در کادر زیر وارد کنید:</label>
+            <textarea id="jsonInput" rows="10" class="w-full p-4 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-left" dir="ltr" placeholder='[{ "remarks": "...", "outbounds": [...] }]'></textarea>
+            <button onclick="convertJson()" class="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-all active:scale-95 shadow-lg">پردازش و استخراج</button>
+        </div>
+
+        <div id="resultContainer" class="space-y-4"></div>
+    </div>
+
+    <script>
+        function convertJson() {
+            const input = document.getElementById('jsonInput').value;
+            const container = document.getElementById('resultContainer');
+            container.innerHTML = '';
+
+            try {
+                const data = JSON.parse(input);
+                let count = 0;
+
+                data.forEach((item, index) => {
+                    const vlessOutbound = item.outbounds?.find(o => o.protocol === 'vless');
+                    if (vlessOutbound) {
+                        const uuid = vlessOutbound.settings.vnext[0].users[0].id;
+                        const ws = vlessOutbound.streamSettings.wsSettings;
+                        const tls = vlessOutbound.streamSettings.tlsSettings;
+                        const remark = item.remarks || `Config ${index + 1}`;
+                        
+                        // بررسی و استخراج فرگمنت (Fragment)
+                        let fragmentParam = "";
+                        const sockopt = vlessOutbound.streamSettings.sockopt;
+                        if (sockopt && sockopt.fragment) {
+                            const f = sockopt.fragment;
+                            // فرمت استاندارد فرگمنت در لینک: packets,length,interval
+                            fragmentParam = `&fragment=${f.packets},${f.length},${f.interval}`;
+                        }
+
+                        // ساخت لینک نهایی با آدرس chatgpt.com
+                        const vlessLink = `vless://${uuid}@chatgpt.com:443?encryption=none&security=tls&sni=${tls.serverName}&fp=${tls.fingerprint || 'chrome'}&type=ws&host=${ws.host}&path=${encodeURIComponent(ws.path)}${fragmentParam}#${encodeURIComponent(remark)}`;
+
+                        createConfigCard(remark, vlessLink);
+                        count++;
+                    }
+                });
+                
+                if(count === 0) alert('هیچ پروتکل VLESS در این فایل پیدا نشد.');
+                
+            } catch (e) {
+                alert('خطا در تحلیل JSON. مطمئن شوید متن را به طور کامل کپی کرده‌اید.');
+                console.error(e);
+            }
+        }
+
+        function createConfigCard(remark, link) {
+            const container = document.getElementById('resultContainer');
+            const card = document.createElement('div');
+            card.className = 'bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-md flex flex-col md:flex-row items-center gap-4';
+            card.innerHTML = `
+                <div class="flex-1 min-w-0 w-full text-right">
+                    <h3 class="text-blue-400 font-bold mb-1 truncate">${remark}</h3>
+                    <div class="bg-black/30 p-2 rounded border border-slate-600/50">
+                        <code class="text-[11px] break-all text-gray-400 block">${link}</code>
+                    </div>
+                </div>
+                <button onclick="copyLink(this, '${link}')" class="w-full md:w-32 bg-slate-700 hover:bg-blue-600 text-white text-sm py-3 rounded-xl font-bold transition-all shrink-0">کپی لینک</button>
+            `;
+            container.appendChild(card);
+        }
+
+        function copyLink(btn, text) {
+            navigator.clipboard.writeText(text);
+            const originalText = btn.innerText;
+            btn.innerText = 'کپی شد! ✅';
+            btn.classList.replace('bg-slate-700', 'bg-green-600');
+            setTimeout(() => {
+                btn.innerText = originalText;
+                btn.classList.replace('bg-green-600', 'bg-slate-700');
+            }, 2000);
+        }
+    </script>
+</body>
+</html>
